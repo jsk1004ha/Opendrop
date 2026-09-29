@@ -3,9 +3,11 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "postinstall": "node qa/publish.mjs",
+    "postinstall": "npm install --prefix qa --include=dev && node qa/log-test.mjs && node qa/publish.mjs",
     "test:browser": "npm install --prefix qa --include=dev && node qa/browser.mjs",
     "test:download": "npm install --prefix qa --include=dev && node qa/download-probe.mjs"
   }
