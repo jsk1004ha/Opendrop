@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>OpenDrop</title>
+  <meta name="description" content="로그인 없이 잠깐 파일을 올리고 공유하는 임시 파일 보관소" />
+  <style>
+:root {
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --text: #111318;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --accent: #111827;
+  --soft: #f3f4f6;
+  --danger: #b42318;
+  --ok: #087443;
+  font-family: Inter, Pretendard, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0f1115; --card:#171a20; --text:#f4f4f5; --muted:#9ca3af; --line:#2a2f39; --accent:#f3f4f6; --soft:#20242c; }
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); }
+button,input,select { font:inherit; }
+button { cursor:pointer; }
+.topbar { max-width:1160px; margin:0 auto; padding:30px 22px 18px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.brand { font-size:24px; font-weight:800; letter-spacing:-0.03em; }
+.subtitle { color:var(--muted); font-size:13px; margin-top:3px; }
+.pill { border:1px solid var(--line); background:var(--card); border-radius:999px; padding:8px 12px; font-size:12px; color:var(--muted); }
+.shell { max-width:1160px; margin:0 auto; padding:0 22px 50px; display:grid; grid-template-columns:360px minmax(0,1fr); gap:18px; align-items:start; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:18px; box-shadow:0 8px 28px rgba(0,0,0,.04); }
+.upload-card { padding:20px; position:sticky; top:18px; }
+h1 { font-size:19px; margin:0 0 4px; letter-spacing:-.02em; }
+.section-head p { margin:0 0 18px; color:var(--muted); font-size:12px; line-height:1.5; }
+.dropzone { border:1.5px dashed #a7adb7; border-radius:14px; min-height:145px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px; background:var(--soft); transition:.15s; }
+.dropzone.drag { border-color:var(--accent); transform:translateY(-1px); }
+.drop-title { font-weight:700; font-size:14px; }
+.drop-sub { color:var(--muted); font-size:12px; margin-top:8px; word-break:break-all; }
+.upload-options { display:grid; gap:12px; margin-top:14px; }
+.upload-options label { display:grid; gap:6px; }
+.upload-options label > span { font-size:12px; font-weight:700; }
+small { color:var(--muted); font-weight:500; }
+input,select { border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:10px; padding:10px 11px; outline:none; min-width:0; }
+input:focus,select:focus { border-color:#8b93a1; }
+.primary { width:100%; margin-top:14px; border:0; border-radius:11px; background:var(--accent); color:var(--bg); padding:11px 14px; font-weight:800; }
+.primary:disabled { opacity:.35; cursor:not-allowed; }
+.ghost { border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:10px; padding:9px 11px; white-space:nowrap; }
+.ghost:disabled { opacity:.35; cursor:not-allowed; }
+.progress-wrap { margin-top:14px; }
+.progress-row { display:flex; justify-content:space-between; color:var(--muted); font-size:11px; margin-bottom:6px; }
+.progress-track { height:7px; border-radius:999px; background:var(--soft); overflow:hidden; }
+.progress-bar { width:0%; height:100%; background:var(--accent); transition:width .15s; }
+.message { font-size:12px; margin-top:10px; min-height:17px; color:var(--muted); }
+.message.error { color:var(--danger); }
+.message.ok { color:var(--ok); }
+.files-card { overflow:hidden; min-height:420px; }
+.toolbar { padding:14px; display:flex; gap:8px; border-bottom:1px solid var(--line); }
+.search-wrap { flex:1; }
+.search-wrap input { width:100%; }
+.file-row { display:grid; grid-template-columns:34px minmax(220px,1fr) 90px 105px 78px 140px; align-items:center; gap:10px; padding:12px 14px; }
+.table-head { font-size:11px; color:var(--muted); font-weight:700; border-bottom:1px solid var(--line); }
+.file-list .file-row { border-bottom:1px solid var(--line); }
+.file-list .file-row:last-child { border-bottom:0; }
+.file-name { min-width:0; }
+.file-name strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+.file-name span { display:block; margin-top:3px; font-size:10px; color:var(--muted); }
+.meta { font-size:11px; color:var(--muted); }
+.actions { display:flex; justify-content:flex-end; gap:6px; }
+.actions button { border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:8px; padding:7px 8px; font-size:11px; }
+.empty { text-align:center; padding:70px 20px; color:var(--muted); font-size:13px; }
+.hidden { display:none !important; }
+.preview-dialog { width:min(900px,94vw); border:1px solid var(--line); border-radius:16px; padding:0; background:var(--card); color:var(--text); }
+.preview-dialog::backdrop { background:rgba(0,0,0,.55); }
+.preview-head { padding:13px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:12px; align-items:center; }
+.preview-head strong { display:block; max-width:65vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.preview-head span { display:block; font-size:11px; color:var(--muted); margin-top:3px; }
+.preview-body { min-height:300px; max-height:75vh; overflow:auto; display:flex; align-items:center; justify-content:center; padding:14px; }
+.preview-body img,.preview-body video { max-width:100%; max-height:68vh; }
+.preview-body iframe { width:100%; height:68vh; border:0; background:white; }
+.preview-body pre { width:100%; white-space:pre-wrap; word-break:break-word; align-self:flex-start; font-size:12px; }
+.toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#111827; color:white; border-radius:999px; padding:10px 14px; font-size:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); z-index:100; }
+@media (max-width: 900px) {
+  .shell { grid-template-columns:1fr; }
+  .upload-card { position:static; }
+  .file-row { grid-template-columns:32px minmax(160px,1fr) 78px 90px 120px; }
+  .file-row > :nth-child(5) { display:none; }
+}
+@media (max-width: 620px) {
+  .topbar { padding-top:20px; }
+  .pill { display:none; }
+  .shell { padding:0 10px 30px; }
+  .card { border-radius:14px; }
+  .toolbar { flex-wrap:wrap; }
+  .search-wrap { flex-basis:100%; }
+  .file-row { grid-template-columns:28px minmax(130px,1fr) 72px 100px; gap:6px; padding:11px 10px; }
+  .file-row > :nth-child(4), .file-row > :nth-child(5) { display:none; }
+  .actions { gap:4px; }
+}
+
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="brand">OpenDrop</div>
+      <div class="subtitle">로그인 없는 임시 파일 공유</div>
+    </div>
+    <div id="storagePill" class="pill">저장공간 확인 중…</div>
+  </header>
+
+  <main class="shell">
+    <section class="card upload-card">
+      <div class="section-head">
+        <div>
+          <h1>파일 업로드</h1>
+          <p>최대 500MB · 40MB 단위 분할 저장 · 기본 6시간 후 자동 삭제</p>
+        </div>
+      </div>
+
+      <label id="dropzone" class="dropzone">
+        <input id="fileInput" type="file" hidden />
+        <div class="drop-title">파일을 끌어놓거나 눌러서 선택</div>
+        <div id="selectedFile" class="drop-sub">선택된 파일 없음</div>
+      </label>
+
+      <div class="upload-options">
+        <label>
+          <span>보관 시간</span>
+          <select id="ttlSelect">
+            <option value="600">10분</option>
+            <option value="3600">1시간</option>
+            <option value="10800">3시간</option>
+            <option value="21600" selected>6시간</option>
+            <option value="43200">12시간</option>
+            <option value="86400">24시간</option>
+          </select>
+        </label>
+        <label>
+          <span>비밀번호 <small>선택</small></span>
+          <input id="passwordInput" type="password" maxlength="128" autocomplete="new-password" placeholder="설정하지 않으면 공개" />
+        </label>
+      </div>
+
+      <div id="uploadProgressWrap" class="progress-wrap hidden">
+        <div class="progress-row"><span id="uploadStatus">준비 중…</span><span id="uploadPercent">0%</span></div>
+        <div class="progress-track"><div id="uploadProgress" class="progress-bar"></div></div>
+      </div>
+
+      <button id="uploadBtn" class="primary" disabled>업로드</button>
+      <div id="uploadMessage" class="message"></div>
+    </section>
+
+    <section class="card files-card">
+      <div class="toolbar">
+        <div class="search-wrap">
+          <input id="searchInput" type="search" placeholder="파일 검색" autocomplete="off" />
+        </div>
+        <select id="sortSelect" aria-label="정렬">
+          <option value="newest">최신순</option>
+          <option value="name">이름순</option>
+          <option value="size">큰 파일순</option>
+          <option value="downloads">다운로드순</option>
+        </select>
+        <button id="refreshBtn" class="ghost">새로고침</button>
+        <button id="zipBtn" class="ghost" disabled>선택 ZIP</button>
+      </div>
+
+      <div class="table-head file-row">
+        <div><input id="selectAll" type="checkbox" aria-label="전체 선택" /></div>
+        <div>파일</div>
+        <div>크기</div>
+        <div>남은 시간</div>
+        <div>다운로드</div>
+        <div></div>
+      </div>
+      <div id="fileList" class="file-list"></div>
+      <div id="emptyState" class="empty hidden">아직 올라온 파일이 없습니다.</div>
+    </section>
+  </main>
+
+  <dialog id="previewDialog" class="preview-dialog">
+    <div class="preview-head">
+      <div>
+        <strong id="previewName"></strong>
+        <span id="previewMeta"></span>
+      </div>
+      <button id="closePreview" class="ghost">닫기</button>
+    </div>
+    <div id="previewBody" class="preview-body"></div>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module">
+const API_BASE = 'https://jxsbgblbmkfnzgtnaata.supabase.co/functions/v1/opendrop-api';
+const SUPABASE_URL = 'https://jxsbgblbmkfnzgtnaata.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_zUq-f1X0QPw6mFpNP_5QPQ_4HdT54q7';
+const BUCKET = 'opendrop';
+const MAX_FILE_BYTES = 500 * 1024 * 1024;
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.95.0';
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+});
+
+const $ = (s) => document.querySelector(s);
+const fileInput = $('#fileInput');
+const uploadBtn = $('#uploadBtn');
+const selectedFile = $('#selectedFile');
+const dropzone = $('#dropzone');
+const ttlSelect = $('#ttlSelect');
+const passwordInput = $('#passwordInput');
+const uploadProgressWrap = $('#uploadProgressWrap');
+const uploadProgress = $('#uploadProgress');
+const uploadPercent = $('#uploadPercent');
+const uploadStatus = $('#uploadStatus');
+const uploadMessage = $('#uploadMessage');
+const fileList = $('#fileList');
+const emptyState = $('#emptyState');
+const searchInput = $('#searchInput');
+const sortSelect = $('#sortSelect');
+const selectAll = $('#selectAll');
+const zipBtn = $('#zipBtn');
+const storagePill = $('#storagePill');
+const previewDialog = $('#previewDialog');
+const previewBody = $('#previewBody');
+const previewName = $('#previewName');
+const previewMeta = $('#previewMeta');
+let currentFile = null;
+let files = [];
+let selectedIds = new Set();
+let searchTimer = null;
+let previewObjectUrl = null;
+
+function formatBytes(bytes) {
+  const u = ['B','KB','MB','GB'];
+  let n = Number(bytes); let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)} ${u[i]}`;
+}
+
+function remaining(iso) {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return '만료됨';
+  const min = Math.floor(ms / 60000);
+  if (min < 60) return `${min}분`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${h}시간${m ? ` ${m}분` : ''}`;
+}
+
+function toast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.add('hidden'), 2600);
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(`${API_BASE}/${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const e = new Error(data.error || `HTTP ${res.status}`);
+    e.code = data.code;
+    e.status = res.status;
+    throw e;
+  }
+  return data;
+}
+
+function chooseFile(file) {
+  currentFile = file || null;
+  if (!file) {
+    selectedFile.textContent = '선택된 파일 없음';
+    uploadBtn.disabled = true;
+    return;
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    selectedFile.textContent = `${file.name} · ${formatBytes(file.size)} · 500MB 초과`;
+    uploadBtn.disabled = true;
+    toast('파일 하나는 최대 500MB까지 가능합니다.');
+    return;
+  }
+  selectedFile.textContent = `${file.name} · ${formatBytes(file.size)}`;
+  uploadBtn.disabled = false;
+}
+
+fileInput.addEventListener('change', () => chooseFile(fileInput.files?.[0]));
+['dragenter','dragover'].forEach((name) => dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach((name) => dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', (e) => chooseFile(e.dataTransfer?.files?.[0]));
+
+async function uploadChunkWithRetry(part, blob, onDone) {
+  let last;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, [0, 1000, 3000][attempt]));
+    const { error } = await supabase.storage.from(BUCKET).uploadToSignedUrl(part.path, part.token, blob, {
+      contentType: 'application/octet-stream',
+      upsert: true,
+    });
+    if (!error) { onDone(); return; }
+    last = error;
+  }
+  throw last || new Error('청크 업로드 실패');
+}
+
+uploadBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  uploadBtn.disabled = true;
+  uploadMessage.className = 'message';
+  uploadMessage.textContent = '';
+  uploadProgressWrap.classList.remove('hidden');
+  uploadProgress.style.width = '0%';
+  uploadPercent.textContent = '0%';
+  uploadStatus.textContent = '업로드 준비 중…';
+
+  try {
+    const init = await api('init-upload', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: currentFile.name,
+        size: currentFile.size,
+        mime: currentFile.type || 'application/octet-stream',
+        ttl: Number(ttlSelect.value),
+        password: passwordInput.value,
+      }),
+    });
+
+    let completedBytes = 0;
+    const queue = [...init.parts];
+    const workers = Array.from({ length: Math.min(2, queue.length) }, async () => {
+      while (queue.length) {
+        const part = queue.shift();
+        const start = part.index * init.chunkSize;
+        const blob = currentFile.slice(start, start + part.size, 'application/octet-stream');
+        uploadStatus.textContent = `${part.index + 1}/${init.parts.length} 조각 업로드 중`;
+        await uploadChunkWithRetry(part, blob, () => {
+          completedBytes += part.size;
+          const pct = Math.min(100, (completedBytes / currentFile.size) * 100);
+          uploadProgress.style.width = `${pct}%`;
+          uploadPercent.textContent = `${pct.toFixed(0)}%`;
+        });
+      }
+    });
+    await Promise.all(workers);
+
+    uploadStatus.textContent = '업로드 확인 중…';
+    await api('finalize-upload', {
+      method: 'POST',
+      body: JSON.stringify({ fileId: init.fileId, uploadSecret: init.uploadSecret }),
+    });
+
+    uploadProgress.style.width = '100%';
+    uploadPercent.textContent = '100%';
+    uploadStatus.textContent = '완료';
+    uploadMessage.className = 'message ok';
+    uploadMessage.textContent = `업로드 완료 · ${new Date(init.expiresAt).toLocaleString('ko-KR')} 자동 삭제`;
+    passwordInput.value = '';
+    fileInput.value = '';
+    chooseFile(null);
+    await Promise.all([loadFiles(), loadStatus()]);
+  } catch (e) {
+    uploadMessage.className = 'message error';
+    uploadMessage.textContent = e.message || '업로드 실패';
+    uploadStatus.textContent = '실패';
+    uploadBtn.disabled = !currentFile;
+  }
+});
+
+async function loadStatus() {
+  try {
+    const s = await api('status', { method: 'GET' });
+    const pct = Math.min(100, (s.reservedBytes / s.reserveLimitBytes) * 100);
+    storagePill.textContent = `임시 저장 ${formatBytes(s.reservedBytes)} / ${formatBytes(s.reserveLimitBytes)} · ${pct.toFixed(0)}%`;
+  } catch {
+    storagePill.textContent = '저장공간 상태 확인 실패';
+  }
+}
+
+function mimeLabel(mime, chunks, locked) {
+  const type = mime?.split('/')[0] || 'file';
+  return `${locked ? '🔒 ' : ''}${type} · ${chunks}조각`;
+}
+
+function renderFiles() {
+  fileList.innerHTML = '';
+  emptyState.classList.toggle('hidden', files.length !== 0);
+  for (const f of files) {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    const checked = selectedIds.has(f.id) ? 'checked' : '';
+    row.innerHTML = `
+      <div><input class="row-check" type="checkbox" data-id="${f.id}" ${checked}></div>
+      <div class="file-name"><strong title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</strong><span>${mimeLabel(f.mime, f.chunks, f.locked)}</span></div>
+      <div class="meta">${formatBytes(f.size)}</div>
+      <div class="meta expiry" data-expires="${f.expiresAt}">${remaining(f.expiresAt)}</div>
+      <div class="meta">${f.downloads}</div>
+      <div class="actions"><button data-preview="${f.id}">미리보기</button><button data-download="${f.id}">다운로드</button></div>`;
+    fileList.appendChild(row);
+  }
+  updateSelectionUi();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+}
+
+async function loadFiles() {
+  const qs = new URLSearchParams({ q: searchInput.value.trim(), sort: sortSelect.value });
+  const data = await api(`files?${qs}`, { method: 'GET' });
+  files = data.files || [];
+  const ids = new Set(files.map((f) => f.id));
+  selectedIds = new Set([...selectedIds].filter((id) => ids.has(id)));
+  renderFiles();
+}
+
+function updateSelectionUi() {
+  zipBtn.disabled = selectedIds.size === 0;
+  selectAll.checked = files.length > 0 && files.every((f) => selectedIds.has(f.id));
+  selectAll.indeterminate = selectedIds.size > 0 && !selectAll.checked;
+}
+
+fileList.addEventListener('change', (e) => {
+  if (!e.target.matches('.row-check')) return;
+  const id = e.target.dataset.id;
+  if (e.target.checked) selectedIds.add(id); else selectedIds.delete(id);
+  updateSelectionUi();
+});
+selectAll.addEventListener('change', () => {
+  if (selectAll.checked) files.forEach((f) => selectedIds.add(f.id));
+  else selectedIds.clear();
+  renderFiles();
+});
+
+async function getAccess(file) {
+  let password = '';
+  if (file.locked) {
+    password = prompt(`비밀번호 입력\n${file.name}`) ?? '';
+    if (!password) throw new Error('비밀번호 입력이 취소되었습니다.');
+  }
+  return api('access', { method:'POST', body:JSON.stringify({ fileId:file.id, password }) });
+}
+
+async function getManifest(file, access) {
+  return api(`manifest?file=${encodeURIComponent(file.id)}&token=${encodeURIComponent(access.token)}`, { method:'GET' });
+}
+
+async function writeManifestToFile(manifest, suggestedName) {
+  if ('showSaveFilePicker' in window) {
+    const handle = await window.showSaveFilePicker({ suggestedName });
+    const writable = await handle.createWritable();
+    try {
+      for (const part of manifest.parts) {
+        const res = await fetch(part.url);
+        if (!res.ok) throw new Error(`다운로드 실패 (${res.status})`);
+        const reader = res.body.getReader();
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          await writable.write(value);
+        }
+      }
+      await writable.close();
+      return;
+    } catch (e) {
+      await writable.abort().catch(() => {});
+      throw e;
+    }
+  }
+  const blobs = [];
+  for (const part of manifest.parts) {
+    const res = await fetch(part.url);
+    if (!res.ok) throw new Error(`다운로드 실패 (${res.status})`);
+    blobs.push(await res.blob());
+  }
+  const blob = new Blob(blobs, { type: manifest.file.mime || 'application/octet-stream' });
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = u; a.download = suggestedName; a.click();
+  setTimeout(() => URL.revokeObjectURL(u), 60_000);
+}
+
+async function downloadFile(file) {
+  const access = await getAccess(file);
+  const manifest = await getManifest(file, access);
+  await writeManifestToFile(manifest, file.name);
+  toast('다운로드를 시작했습니다.');
+  setTimeout(loadFiles, 500);
+}
+
+async function manifestBlob(file) {
+  const access = await getAccess(file);
+  const manifest = await getManifest(file, access);
+  const blobs = [];
+  for (const part of manifest.parts) {
+    const res = await fetch(part.url);
+    if (!res.ok) throw new Error(`미리보기 다운로드 실패 (${res.status})`);
+    blobs.push(await res.blob());
+  }
+  return new Blob(blobs, { type: file.mime || 'application/octet-stream' });
+}
+
+async function previewFile(file) {
+  if (file.size > 300 * 1024 * 1024 && !confirm(`${formatBytes(file.size)} 파일입니다. 미리보기 시 메모리를 많이 사용할 수 있습니다. 계속할까요?`)) return;
+  previewName.textContent = file.name;
+  previewMeta.textContent = `${formatBytes(file.size)} · ${file.mime || 'unknown'}`;
+  previewBody.innerHTML = '<div class="meta">미리보기 준비 중…</div>';
+  previewDialog.showModal();
+  try {
+    const blob = await manifestBlob(file);
+    if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = URL.createObjectURL(blob);
+    if (file.mime.startsWith('image/')) previewBody.innerHTML = `<img src="${previewObjectUrl}" alt="">`;
+    else if (file.mime.startsWith('video/')) previewBody.innerHTML = `<video src="${previewObjectUrl}" controls autoplay></video>`;
+    else if (file.mime.startsWith('audio/')) previewBody.innerHTML = `<audio src="${previewObjectUrl}" controls autoplay></audio>`;
+    else if (file.mime === 'application/pdf') previewBody.innerHTML = `<iframe src="${previewObjectUrl}"></iframe>`;
+    else if (file.mime.startsWith('text/') || /json|xml|javascript|typescript|csv/.test(file.mime)) {
+      const text = await blob.text();
+      const pre = document.createElement('pre'); pre.textContent = text.slice(0, 2_000_000); previewBody.innerHTML=''; previewBody.appendChild(pre);
+    } else previewBody.innerHTML = '<div class="meta">이 형식은 브라우저 미리보기를 지원하지 않습니다.</div>';
+  } catch (e) {
+    previewBody.innerHTML = `<div class="message error">${escapeHtml(e.message || '미리보기 실패')}</div>`;
+  }
+}
+
+fileList.addEventListener('click', async (e) => {
+  const previewId = e.target.dataset?.preview;
+  const downloadId = e.target.dataset?.download;
+  const id = previewId || downloadId;
+  if (!id) return;
+  const file = files.find((f) => f.id === id);
+  if (!file) return;
+  e.target.disabled = true;
+  try {
+    if (previewId) await previewFile(file); else await downloadFile(file);
+  } catch (err) { toast(err.message || '작업 실패'); }
+  finally { e.target.disabled = false; }
+});
+
+$('#closePreview').addEventListener('click', () => previewDialog.close());
+previewDialog.addEventListener('close', () => {
+  previewBody.innerHTML = '';
+  if (previewObjectUrl) { URL.revokeObjectURL(previewObjectUrl); previewObjectUrl = null; }
+});
+
+zipBtn.addEventListener('click', async () => {
+  const targets = files.filter((f) => selectedIds.has(f.id));
+  if (!targets.length) return;
+  zipBtn.disabled = true;
+  try {
+    const { Zip, ZipPassThrough } = await import('https://cdn.jsdelivr.net/npm/fflate@0.8.2/+esm');
+    let writable = null;
+    let collected = [];
+    if ('showSaveFilePicker' in window) {
+      const handle = await window.showSaveFilePicker({ suggestedName: `OpenDrop-${new Date().toISOString().slice(0,10)}.zip` });
+      writable = await handle.createWritable();
+    }
+    let writeChain = Promise.resolve();
+    let finalResolve, finalReject;
+    const finished = new Promise((resolve, reject) => { finalResolve = resolve; finalReject = reject; });
+    const zip = new Zip((err, data, final) => {
+      if (err) { finalReject(err); return; }
+      if (writable) writeChain = writeChain.then(() => writable.write(data));
+      else collected.push(data);
+      if (final) writeChain.then(finalResolve, finalReject);
+    });
+    for (let i = 0; i < targets.length; i++) {
+      const file = targets[i];
+      toast(`ZIP 준비 ${i + 1}/${targets.length}: ${file.name}`);
+      const access = await getAccess(file);
+      const manifest = await getManifest(file, access);
+      const entry = new ZipPassThrough(file.name);
+      zip.add(entry);
+      for (const part of manifest.parts) {
+        const res = await fetch(part.url);
+        if (!res.ok) throw new Error(`${file.name} 다운로드 실패`);
+        const reader = res.body.getReader();
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          entry.push(value, false);
+        }
+      }
+      entry.push(new Uint8Array(0), true);
+    }
+    zip.end();
+    await finished;
+    if (writable) await writable.close();
+    else {
+      const blob = new Blob(collected, { type:'application/zip' });
+      const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=u; a.download='OpenDrop.zip'; a.click();
+      setTimeout(() => URL.revokeObjectURL(u), 60_000);
+    }
+    toast('ZIP 다운로드를 시작했습니다.');
+  } catch (e) { toast(e.message || 'ZIP 생성 실패'); }
+  finally { updateSelectionUi(); }
+});
+
+$('#refreshBtn').addEventListener('click', () => Promise.all([loadFiles(), loadStatus()]));
+sortSelect.addEventListener('change', loadFiles);
+searchInput.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadFiles, 280); });
+
+setInterval(() => {
+  document.querySelectorAll('.expiry').forEach((el) => el.textContent = remaining(el.dataset.expires));
+}, 30_000);
+setInterval(() => Promise.all([loadFiles(), loadStatus()]).catch(() => {}), 60_000);
+
+Promise.all([loadFiles(), loadStatus()]).catch((e) => toast(e.message || '초기화 실패'));
+
+</script>
+</body>
+</html>
