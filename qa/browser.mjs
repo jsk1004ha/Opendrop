@@ -4,7 +4,7 @@ import {createServer} from 'node:http';
 import {readFile,writeFile,mkdir,stat,readdir} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {createHash} from 'node:crypto';
-const root=process.cwd(),hash=createHash('sha256');for(const f of ['index.html','app.js','transfer.js','sw.js','qa/browser.mjs'])hash.update(await readFile(f));const key=hash.digest('hex').slice(0,12),marker='/tmp/opendrop-qa-'+key;
+const root=process.cwd(),hash=createHash('sha256');for(const f of ['index.html','style.css','app.js','transfer.js','sw.js','qa/browser.mjs'])hash.update(await readFile(f));const key=hash.digest('hex').slice(0,12),marker='/tmp/opendrop-qa-'+key;
 try{await stat(marker);console.log('OPENDROP_QA cached for identical source '+key);process.exit(0);}catch{}
 await mkdir('_qa',{recursive:true});const downloads='/tmp/opendrop-downloads-'+key;await mkdir(downloads,{recursive:true});
 const report={at:new Date().toISOString(),source:key,checks:[],console:[],failed:[]};
@@ -37,7 +37,7 @@ try{
  await page.click('#clearQueueBtn');await page.click('#setPasswordBtn');await page.click('#removePasswordBtn');
  const large=prefix+'65m.bin';await page.evaluate(name=>{addFiles([new File([new Uint8Array(65*1024*1024).fill(167)],name,{type:'application/octet-stream'})]);},large);await page.click('#uploadBtn');await page.waitForFunction(()=>!busy&&queue.length===1&&(queue[0].state==='done'||queue[0].state==='error'),{timeout:180000});const largeState=await page.evaluate(()=>({state:queue[0].state,message:queue[0].message}));check('65MiB-browser-upload',largeState.state==='done',largeState);
  const largeRow=await page.evaluate(name=>files.find(f=>f.name===name),large);check('65MiB-two-storage-chunks',largeRow?.chunks===2);await page.click('[data-file-id="'+largeRow.id+'"] [data-action="download"]');const binary=await disk(large,180000);check('65MiB-mobile-download-hash',binary.length===65*1024*1024&&createHash('sha256').update(binary).digest('hex')===createHash('sha256').update(Buffer.alloc(65*1024*1024,167)).digest('hex'));
- await page.click('[data-file-id="'+a.id+'"] [data-action="delete"]');await page.waitForSelector('#confirmDialog[open]');await page.click('#confirmYes');await page.waitForFunction(id=>!files.some(f=>f.id===id),{timeout:30000},a.id);check('uploader-delete-dialog',true);
+ const del='[data-file-id="'+a.id+'"] [data-action="delete"]';await page.$eval(del,e=>e.scrollIntoView({block:'center',inline:'center',behavior:'instant'}));await new Promise(r=>setTimeout(r,300));const hit=await page.$eval(del,e=>{const r=e.getBoundingClientRect(),top=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return{x:r.x+r.width/2,y:r.y+r.height/2,top:top?.outerHTML,disabled:e.disabled};});report.checks.push({name:'delete-touch-target',detail:hit});await page.mouse.click(hit.x,hit.y);await page.waitForSelector('#confirmDialog[open]',{timeout:10000});await page.click('#confirmYes');await page.waitForFunction(id=>!files.some(f=>f.id===id),{timeout:30000},a.id);check('uploader-delete-dialog',true);
  check('no-unexpected-JS-errors',report.console.length===0,report.console);report.ok=true;
 }catch(e){report.ok=false;report.error=redact(e.stack||e);if(page)try{report.ui=await page.$eval('#errorDetail',e=>e.textContent);await page.screenshot({path:'_qa/failure.png',fullPage:true});}catch{}}
 finally{
