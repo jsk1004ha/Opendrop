@@ -1,29 +1,48 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import {createServer} from 'node:http';
-import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,stat,readdir} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
-const root=process.cwd();await mkdir('_qa',{recursive:true});
+import {createHash} from 'node:crypto';
+const root=process.cwd(),hash=createHash('sha256');for(const f of ['index.html','app.js','transfer.js','sw.js','qa/browser.mjs'])hash.update(await readFile(f));const key=hash.digest('hex').slice(0,12),marker='/tmp/opendrop-qa-'+key;
+try{await stat(marker);console.log('OPENDROP_QA cached for identical source '+key);process.exit(0);}catch{}
+await mkdir('_qa',{recursive:true});const downloads='/tmp/opendrop-downloads-'+key;await mkdir(downloads,{recursive:true});
+const report={at:new Date().toISOString(),source:key,checks:[],console:[],failed:[]};
 const redact=s=>String(s).replace(/(https?:\/\/[^\s"']+)\?[^\s"']*/g,'$1?[redacted]').replace(/eyJ[A-Za-z0-9_.-]{30,}/g,'[token]');
-const report={at:new Date().toISOString(),console:[],failed:[],requests:[],checks:[]};
-const server=createServer(async(req,res)=>{try{const p=new URL(req.url,'http://localhost').pathname;const f=resolve(root,'.'+(p==='/'?'/index.html':p));if(!f.startsWith(root+'/'))throw Error('path');const b=await readFile(f);res.setHeader('Content-Type',({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.png':'image/png'})[extname(f)]||'application/octet-stream');res.end(b);}catch{res.writeHead(404);res.end();}});await new Promise(r=>server.listen(4173,'127.0.0.1',r));
-let browser;
+const check=(name,ok,detail)=>{report.checks.push({name,ok,...(detail?{detail}:{})});if(!ok)throw Error('Assertion failed: '+name);};
+const server=createServer(async(req,res)=>{try{const p=new URL(req.url,'http://localhost').pathname,f=resolve(root,'.'+(p==='/'?'/index.html':p));if(!f.startsWith(root+'/'))throw Error('path');const b=await readFile(f);res.setHeader('Content-Type',({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.png':'image/png'})[extname(f)]||'application/octet-stream');res.end(b);}catch{res.writeHead(404);res.end();}});await new Promise(r=>server.listen(4173,'127.0.0.1',r));
+let browser,page;let blockDirect=false;
+async function disk(name,timeout=30000){const end=Date.now()+timeout;while(Date.now()<end){try{const p=resolve(downloads,name);await stat(p);if(!(await readdir(downloads)).some(n=>n.endsWith('.crdownload')))return await readFile(p);}catch{}await new Promise(r=>setTimeout(r,250));}throw Error('Download did not finish: '+name);}
+function unzipStored(b){const e=b.lastIndexOf(Buffer.from([80,75,5,6]));if(e<0)throw Error('No ZIP EOCD');let p=b.readUInt32LE(e+16),count=b.readUInt16LE(e+10);const out={};for(let i=0;i<count;i++){if(b.readUInt32LE(p)!==0x02014b50)throw Error('ZIP central header');const n=b.readUInt16LE(p+28),x=b.readUInt16LE(p+30),c=b.readUInt16LE(p+32),len=b.readUInt32LE(p+24),off=b.readUInt32LE(p+42),name=b.subarray(p+46,p+46+n).toString('utf8');const start=off+30+b.readUInt16LE(off+26)+b.readUInt16LE(off+28);out[name]=b.subarray(start,start+len);p+=46+n+x+c;}return out;}
+const prefix='__qa_'+key+'_',alpha=prefix+'alpha.txt',beta=prefix+'beta.txt',locked=prefix+'locked.txt';const alphaText='OpenDrop UTF-8 한글 검증\n',betaText='second file — multiple upload\n';
 try{
- chromium.setGraphicsMode=false;
- browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:'shell'});
- const page=await browser.newPage();await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true,deviceScaleFactor:1});
- page.on('console',m=>{if(m.type()==='error')report.console.push(redact(m.text()));});page.on('pageerror',e=>report.console.push(redact(e.message)));
- page.on('requestfailed',r=>report.failed.push({url:redact(r.url()),error:r.failure()?.errorText}));
- page.on('response',r=>{if(r.url().includes('supabase.co'))report.requests.push({url:redact(r.url()),status:r.status()});});
- await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle0',timeout:60000});
- report.checks.push({name:'initial-page',title:await page.title(),overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),text:await page.$eval('body',e=>e.innerText.slice(0,1200))});
- await page.screenshot({path:'_qa/mobile.png',fullPage:true});
- await writeFile('/tmp/opendrop-browser-test.txt','OpenDrop browser verification — 2026-09-29\n');
- const input=await page.$('input[type=file]');if(input){await input.uploadFile('/tmp/opendrop-browser-test.txt');
-  if(await page.$('#ttlSelect'))await page.select('#ttlSelect','600');
-  if(await page.$('#ttl'))await page.select('#ttl','600');
-  const btn=await page.$('#uploadBtn, #upload');if(btn){await btn.click();await new Promise(r=>setTimeout(r,15000));report.checks.push({name:'upload',text:await page.$eval('body',e=>e.innerText.slice(-1800))});}
- }
- await page.screenshot({path:'_qa/mobile-after.png',fullPage:true});
-}catch(e){report.error=redact(e.stack||e);}
-finally{if(browser)await browser.close();server.close();await writeFile('_qa/report.json',JSON.stringify(report,null,2));console.log('OPENDROP_BROWSER_REPORT '+JSON.stringify(report));}
+ chromium.setGraphicsMode=false;browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:'shell'});page=await browser.newPage();await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true,deviceScaleFactor:1});
+ await page.setRequestInterception(true);page.on('request',r=>{if(blockDirect&&r.method()==='PUT'&&r.url().includes('/storage/v1/object/upload/sign/'))r.abort('failed');else r.continue();});
+ page.on('console',m=>{if(m.type()==='error'&&!/net::ERR_FAILED|status of 403/.test(m.text()))report.console.push(redact(m.text()));});page.on('pageerror',e=>report.console.push(redact(e.message)));page.on('requestfailed',r=>report.failed.push({url:redact(r.url()),error:r.failure()?.errorText,intentional:blockDirect&&r.url().includes('/storage/v1/object/upload/sign/')}));
+ const cdp=await page.createCDPSession();await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:downloads,eventsEnabled:true});
+ await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle0',timeout:60000});await page.waitForFunction(()=>document.querySelector('#connectionStatus').textContent.includes('[ok]'),{timeout:30000});
+ check('default-retention-six-hours',await page.$eval('#ttlSelect',e=>e.value)==='21600');check('multiple-file-input',await page.$eval('#fileInput',e=>e.multiple));check('no-external-scripts',await page.evaluate(()=>[...document.scripts].every(s=>!s.src||new URL(s.src).origin===location.origin)));
+ for(const width of [320,390,640,768,1024,1440]){await page.setViewport({width,height:900,isMobile:width<700,hasTouch:width<700,deviceScaleFactor:1});const l=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth,canvas:getComputedStyle(document.documentElement).backgroundColor,radius:getComputedStyle(document.querySelector('#uploadBtn')).borderRadius,shadow:getComputedStyle(document.querySelector('.terminal')).boxShadow}));check('layout-'+width,!l.overflow,l);if(width===390||width===1440)await page.screenshot({path:'_qa/'+(width===390?'mobile':'desktop')+'.png',fullPage:true});}
+ await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true,deviceScaleFactor:1});await page.select('#ttlSelect','600');
+ await writeFile('/tmp/'+alpha,alphaText);await writeFile('/tmp/'+beta,betaText);const input=await page.$('#fileInput');await input.uploadFile('/tmp/'+alpha,'/tmp/'+beta);check('multi-picker-queue',await page.evaluate(()=>queue.length)===2);await page.click('#uploadBtn');await page.waitForFunction(()=>queue.length===2&&queue.every(q=>q.state==='done'),{timeout:60000});check('multiple-uploads-complete',true);
+ const a=await page.evaluate(name=>files.find(f=>f.name===name),alpha);const b=await page.evaluate(name=>files.find(f=>f.name===name),beta);check('listed-after-upload',!!a&&!!b);check('expiry-from-completion',Date.parse(a.expiresAt)-Date.parse(a.createdAt)>=599000&&Date.parse(a.expiresAt)-Date.parse(a.createdAt)<=601000);
+ await page.click('[data-file-id="'+a.id+'"] [data-action="download"]');const downloaded=await disk(alpha);check('mobile-stream-download-byte-match',downloaded.equals(Buffer.from(alphaText)));
+ const ranges=await page.evaluate(async id=>{const f=files.find(f=>f.id===id),m=await manifest(f),url=await registerTransfer([m],{name:f.name,inline:true,mime:'text/plain'}),r=await fetch(url,{headers:{Range:'bytes=1-8'}});return{status:r.status,len:(await r.arrayBuffer()).byteLength,range:r.headers.get('content-range')};},a.id);check('service-worker-range',ranges.status===206&&ranges.len===8,ranges);
+ await page.click('[data-file-id="'+a.id+'"] input[type=checkbox]');await page.click('[data-file-id="'+b.id+'"] input[type=checkbox]');await page.click('#zipBtn');const zip=unzipStored(await disk('OpenDrop.zip'));check('zip-byte-match',zip[alpha]?.equals(Buffer.from(alphaText))&&zip[beta]?.equals(Buffer.from(betaText)));
+ await page.click('#clearQueueBtn');await page.click('#setPasswordBtn');await page.waitForSelector('#passwordDialog[open]');await page.type('#passwordValue','QA-password-2026!');await page.click('#passwordSubmit');await page.waitForFunction(()=>!document.querySelector('#passwordDialog').open);check('password-setting-dialog',await page.$eval('#setPasswordBtn',e=>e.textContent.includes('설정됨')));
+ await page.evaluate(name=>{const dt=new DataTransfer();dt.items.add(new File(['private document via fallback\n'],name,{type:'text/plain'}));document.querySelector('#dropzone').dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dt}));},locked);check('drag-drop-queue',await page.evaluate(()=>queue.length)===1);
+ blockDirect=true;await page.click('#uploadBtn');await page.waitForFunction(()=>queue.length===1&&(queue[0].state==='done'||queue[0].state==='error'),{timeout:90000});const uploaded=await page.evaluate(()=>({state:queue[0].state,proxy:queue[0].proxy,message:queue[0].message}));check('blocked-direct-upload-fallback',uploaded.state==='done'&&uploaded.proxy,uploaded);blockDirect=false;
+ const f=await page.evaluate(name=>files.find(f=>f.name===name),locked);check('protected-file-listed',!!f?.locked);await page.click('[data-file-id="'+f.id+'"] [data-action="preview"]');await page.waitForSelector('#passwordDialog[open]');await page.type('#passwordValue','wrong');await page.click('#passwordSubmit');await page.waitForFunction(()=>document.querySelector('#passwordError').textContent.includes('일치'),{timeout:30000});check('wrong-password-rejected',await page.$eval('#passwordDialog',e=>e.open));await page.$eval('#passwordValue',e=>e.value='');await page.type('#passwordValue','QA-password-2026!');await page.click('#passwordSubmit');await page.waitForSelector('#previewBody pre',{timeout:30000});check('password-unlock-text-preview',await page.$eval('#previewBody pre',e=>e.textContent)==='private document via fallback\n');await page.screenshot({path:'_qa/password-preview.png',fullPage:true});await page.click('[data-close="previewDialog"]');
+ const proxy=await page.evaluate(async id=>{const f=files.find(f=>f.id===id),m=await manifest(f);m._proxy=true;const bs=[];for await(const a of T.fileBytes(m,0,6))bs.push(...a);return new TextDecoder().decode(new Uint8Array(bs));},f.id);check('authenticated-download-proxy-range',proxy==='private');
+ await page.click('#clearQueueBtn');await page.click('#setPasswordBtn');await page.click('#removePasswordBtn');
+ // A 65 MiB actual browser upload spans two 40 MiB storage objects.
+ const large=prefix+'65m.bin';await page.evaluate(name=>{addFiles([new File([new Uint8Array(65*1024*1024).fill(167)],name,{type:'application/octet-stream'})]);},large);await page.click('#uploadBtn');await page.waitForFunction(()=>queue.length===1&&(queue[0].state==='done'||queue[0].state==='error'),{timeout:180000});const largeState=await page.evaluate(()=>({state:queue[0].state,message:queue[0].message}));check('65MiB-browser-upload',largeState.state==='done',largeState);
+ const largeRow=await page.evaluate(name=>files.find(f=>f.name===name),large);check('65MiB-two-storage-chunks',largeRow?.chunks===2);await page.click('[data-file-id="'+largeRow.id+'"] [data-action="download"]');const binary=await disk(large,180000);check('65MiB-mobile-download-hash',binary.length===65*1024*1024&&createHash('sha256').update(binary).digest('hex')===createHash('sha256').update(Buffer.alloc(65*1024*1024,167)).digest('hex'));
+ await page.click('[data-file-id="'+a.id+'"] [data-action="delete"]');await page.waitForSelector('#confirmDialog[open]');await page.click('#confirmYes');await page.waitForFunction(id=>!files.some(f=>f.id===id),{timeout:30000},a.id);check('uploader-delete-dialog',true);
+ check('no-unexpected-JS-errors',report.console.length===0,report.console);
+ report.ok=true;
+}catch(e){report.ok=false;report.error=redact(e.stack||e);if(page)try{report.ui=await page.$eval('#errorDetail',e=>e.textContent);await page.screenshot({path:'_qa/failure.png',fullPage:true});}catch{}}
+finally{
+ if(page)try{const cleanup=await page.evaluate(async prefix=>{const own=ownership(),d=await api('files?'+new URLSearchParams({q:prefix}));let deleted=0;for(const f of d.files){if(own[f.id]){await api('delete-file',{fileId:f.id,uploadSecret:own[f.id].secret});deleted++;delete own[f.id];}}for(const q of queue)if(q.session&&q.state!=='done')try{await api('delete-file',{fileId:q.session.fileId,uploadSecret:q.session.uploadSecret});}catch{}localStorage.setItem('opendrop-own',JSON.stringify(own));return deleted;},prefix);report.cleanup={deleted:cleanup};}catch(e){report.cleanup={error:redact(e.message)};}
+ if(browser)await browser.close();server.close();await writeFile('_qa/report.json',JSON.stringify(report,null,2));console.log('OPENDROP_BROWSER_REPORT '+JSON.stringify(report));if(report.ok)await writeFile(marker,'ok');else process.exitCode=1;
+}
