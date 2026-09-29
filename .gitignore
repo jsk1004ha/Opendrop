@@ -1,0 +1,6 @@
+node_modules/
+qa/node_modules/
+_qa/
+.env
+.env.*
+!.env.example

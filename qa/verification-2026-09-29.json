@@ -1,0 +1,49 @@
+{
+  "version": "0.3.0",
+  "date": "2026-09-29",
+  "browser": {
+    "engine": "Chromium 138 via Puppeteer",
+    "environment": "Render build container, mobile viewport/touch emulation, actual Supabase backend",
+    "physicalPhoneTested": false,
+    "sourceFingerprint": "ac9d00e46d53",
+    "passed": true,
+    "viewportWidthsWithoutHorizontalOverflow": [320, 390, 640, 768, 1024, 1440],
+    "multiFilePickerUpload": true,
+    "dragAndDrop": true,
+    "defaultRetentionSixHours": true,
+    "retentionStartsAtFinalization": true,
+    "passwordModalSetAndUnlock": true,
+    "wrongPasswordRejected": true,
+    "textPreview": true,
+    "downloadedFileBytesMatch": true,
+    "zipEntryBytesMatch": true,
+    "byteRange206": true,
+    "forcedDirectUploadFailureRecoveredViaProxy": true,
+    "authenticatedReadProxy": true,
+    "actual65MiBBrowserUploadAndDownloadHashMatch": true,
+    "uploaderDeleteConfirmation": true,
+    "unexpectedJavaScriptErrors": 0
+  },
+  "boundaryFile": {
+    "environment": "Supabase API and Storage test, separate from browser test",
+    "logicalBytes": 524288000,
+    "chunks": 13,
+    "maximumChunkBytes": 41943040,
+    "uploadedBytes": 524288000,
+    "downloadedVerifiedBytes": 524288000,
+    "everyChunkSHA256Matches": true
+  },
+  "expiry": {
+    "method": "Only the generated boundary-test file expiry was moved into the past; normal scheduled cleanup was allowed to run",
+    "accessAfterExpiryStatus": 410,
+    "databaseRowExistsAfterCron": false,
+    "storageObjectsAfterCron": 0,
+    "manuallyTriggeredCleanupForThisAssertion": false
+  },
+  "limits": {
+    "appTotalCapacityBytes": 943718400,
+    "providerBandwidthAndRequestQuotasStillApply": true,
+    "originalUsersExactMobileNetworkFailureReproduced": false,
+    "allBrowserOrDeviceCombinationsTested": false
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "opendrop-browser-verification",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@sparticuz/chromium": "138.0.2",
+    "puppeteer-core": "24.16.0"
+  }
+}

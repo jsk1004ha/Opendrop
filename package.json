@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "engines": { "node": ">=22" },
-  "scripts": { "postinstall": "node qa/download-probe.mjs && node qa/browser.mjs", "test:browser": "node qa/browser.mjs" },
-  "devDependencies": { "@sparticuz/chromium": "138.0.2", "puppeteer-core": "24.16.0" }
+  "scripts": {
+    "postinstall": "node qa/publish.mjs",
+    "test:browser": "npm install --prefix qa --include=dev && node qa/browser.mjs",
+    "test:download": "npm install --prefix qa --include=dev && node qa/download-probe.mjs"
+  }
 }
